@@ -1,3 +1,9 @@
+import '@fontsource/barlow-condensed/600.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/courier-prime/400.css';
+import '@fontsource/courier-prime/400-italic.css';
+import '@fontsource/courier-prime/700.css';
+import '@fontsource/righteous/400.css';
 import './style.css';
 import { Synth } from './audio/synth';
 import { BIOTYPES, type Side, UPGRADES, type UpgradeKind } from './biotypes';
@@ -29,6 +35,7 @@ let speed = 1;
 /** Seconds until wave 1 starts, so the player can look over the board first. */
 let firstWaveDelay = 0;
 let renderedPhase = '';
+let renderedHud = '';
 
 // ---- Title & biotype selection ----
 
@@ -44,14 +51,16 @@ for (const card of document.querySelectorAll<HTMLButtonElement>('.card')) {
   const b = BIOTYPES[side];
   const foe = BIOTYPES[side === 'human' ? 'monster' : 'human'];
   card.innerHTML = `
-    <h3>${b.name}</h3>
-    <p>${b.tagline}</p>
-    <canvas width="640" height="220"></canvas>
-    <dl>
-      <dt>Tower</dt><dd>${b.tower.name}</dd>
-      <dt>Builds</dt><dd>${b.mechanism.name}</dd>
-      <dt>Faces</dt><dd>${foe.enemy.name}s of the ${foe.name}</dd>
-    </dl>`;
+    <span class="card-band">${b.name}<small>Player Aid Card</small></span>
+    <span class="card-inner">
+      <p>${b.tagline}</p>
+      <canvas width="640" height="220"></canvas>
+      <dl>
+        <dt>Tower</dt><dd>${b.tower.name}</dd>
+        <dt>Builds</dt><dd>${b.mechanism.name}</dd>
+        <dt>Faces</dt><dd>${foe.enemy.name}s of the ${foe.name}</dd>
+      </dl>
+    </span>`;
   const ctx = card.querySelector('canvas')!.getContext('2d')!;
   const preview = () => {
     ctx.clearRect(0, 0, 640, 220);
@@ -64,7 +73,7 @@ for (const card of document.querySelectorAll<HTMLButtonElement>('.card')) {
     place(130, () => drawTower(ctx, b, 70, `${b.tower.damage}-${b.tower.range}`));
     place(310, () => drawMechanism(ctx, b, 48, `${b.mechanism.damage}-${b.mechanism.range}`));
     ctx.fillStyle = '#e3b448';
-    ctx.font = '700 28px "Space Mono", monospace';
+    ctx.font = 'italic 28px "Courier Prime", monospace';
     ctx.textAlign = 'center';
     ctx.fillText('vs', 420, 120);
     place(520, () => drawEnemy(ctx, foe, 40, 0.6));
@@ -82,6 +91,7 @@ function startGame(side: Side): void {
   tool = { kind: 'none' };
   firstWaveDelay = 2;
   renderedPhase = '';
+  renderedHud = '';
   $('pick').hidden = true;
   modal.hidden = true;
   hud.hidden = false;
@@ -94,13 +104,15 @@ function startGame(side: Side): void {
 
 $('btn-speed').addEventListener('click', (e) => {
   speed = speed === 1 ? 2 : speed === 2 ? 4 : 1;
-  (e.currentTarget as HTMLElement).textContent = `${speed}×`;
+  const chit = e.currentTarget as HTMLElement;
+  chit.textContent = `${speed}×`;
+  chit.setAttribute('aria-label', `Game speed ${speed}×`);
 });
 
 $('btn-mute').addEventListener('click', (e) => {
   synth.unlock();
   synth.setMuted(!synth.muted);
-  (e.currentTarget as HTMLElement).textContent = synth.muted ? '♪ Off' : '♪ On';
+  (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(synth.muted));
 });
 
 // ---- Board input ----
@@ -148,32 +160,42 @@ function renderPanels(g: Game): void {
   renderDialog(g);
 }
 
-/** One slim line under the board: what's happening, or what to click. */
+const PHASES = ['Assault', 'Reinforce', 'Terrain'] as const;
+
+/** The Sequence of Play strip under the board: which phase it is, and what to do. */
 function renderBar(g: Game): void {
-  const step = (label: string) => `<span class="step">${label}</span>`;
-  let html = '';
-  if (g.phase === 'ready' || g.phase === 'wave') {
-    html = `${step(g.phase === 'ready' ? 'Deploying' : `Wave ${g.wave} of ${FINAL_WAVE}`)}<span class="bar-text">Sit back and watch — the ${g.player.tower.name} fires on its own.</span>`;
+  const current = g.phase === 'build-mechanism' ? 1 : g.phase === 'build-terrain' ? 2 : 0;
+  let text = '';
+  let button = '';
+  if (g.phase === 'ready') {
+    text = `Deploying counters. Wave 1 is about to land.`;
+  } else if (g.phase === 'wave') {
+    text = `Sit back and watch — the ${g.player.tower.name} fires on its own.`;
   } else if (g.phase === 'build-mechanism' && tool.kind === 'mechanism') {
-    html = `${step('Step 1 of 2')}<span class="bar-text">Click a highlighted hex to place your ${g.player.mechanism.name}. It blocks enemy movement.</span><button class="bar-btn" data-action="back">Back</button>`;
+    text = `Click a highlighted hex to place your ${g.player.mechanism.name}. It blocks enemy movement.`;
+    button = '<button class="bar-btn" data-action="back">Back</button>';
   } else if (g.phase === 'build-terrain' && tool.kind === 'terrain') {
-    html = `${step('Step 2 of 2')}<span class="bar-text">Click an empty hex to place the ${TERRAIN_INFO[tool.terrain].label}. Wave ${g.wave + 1} starts right after.</span><button class="bar-btn" data-action="back">Change</button>`;
+    text = `Click an empty hex to place the ${TERRAIN_INFO[tool.terrain].label}. Wave ${g.wave + 1} starts right after.`;
+    button = '<button class="bar-btn" data-action="back">Change</button>';
   } else if (g.phase === 'build-mechanism' || g.phase === 'build-terrain') {
-    html = `${step(g.phase === 'build-mechanism' ? 'Step 1 of 2' : 'Step 2 of 2')}<span class="bar-text">Between waves — make your choice.</span>`;
+    text = 'Draw your card and choose.';
+  } else {
+    panel.hidden = true;
+    return;
   }
-  panel.hidden = !html;
-  panel.innerHTML = html;
+  const phases = PHASES.map((p, i) => `<li${i === current ? ' class="current"' : ''}>${i + 1} ${p}</li>`).join('');
+  panel.innerHTML = `<span class="sop-label">Sequence of Play</span><ol class="phases">${phases}</ol><span class="bar-text">${text}</span>${button}`;
+  panel.hidden = false;
 }
 
 /** Modal over the board for each between-wave step; it steps aside while you place a piece. */
 function renderDialog(g: Game): void {
   if (g.phase === 'build-mechanism' && tool.kind === 'none') {
     const upgrades = (Object.keys(UPGRADES) as UpgradeKind[])
-      .map((k) => `<button class="option upgrade" data-upgrade="${k}"><strong>${UPGRADES[k].label}</strong><span class="chip">${UPGRADES[k].describe}</span></button>`)
+      .map((k) => `<button class="option upgrade" data-upgrade="${k}"><span class="opt-kind">Upgrade</span><strong>${UPGRADES[k].label}</strong><span class="effect">${UPGRADES[k].describe}</span></button>`)
       .join('');
     const m = g.player.mechanism;
-    showDialog(`
-      <span class="step">Step 1 of 2 · Reinforce</span>
+    showDialog('Reinforcement Phase', `Turn ${g.wave}`, `
       <h3>Wave ${g.wave} repelled. Choose one:</h3>
       <div class="choice">
         <div class="group">
@@ -184,8 +206,8 @@ function renderDialog(g: Game): void {
         <div class="group">
           <span class="group-label">Build new</span>
           <button class="option build" data-action="mechanism">
-            <canvas width="96" height="96" aria-hidden="true"></canvas>
-            <span class="build-text"><strong>${m.name}</strong><span>Auto-turret · ${m.damage} dmg · ${m.range} hex range</span></span>
+            <span class="sheet"><canvas width="96" height="96" aria-hidden="true"></canvas></span>
+            <span class="build-text"><span class="opt-kind">New piece</span><strong>${m.name}</strong><span class="effect">${m.damage} dmg · ${m.range} hex</span></span>
             <span class="stamp">New</span>
           </button>
         </div>
@@ -198,12 +220,11 @@ function renderDialog(g: Game): void {
       .map(
         (t) => `<button class="option terrain" data-terrain="${t}">
           <canvas width="120" height="120" aria-hidden="true" data-preview="${t}"></canvas>
-          <span><strong>${TERRAIN_INFO[t].label}</strong><span>${TERRAIN_INFO[t].describe}</span></span>
+          <span><span class="opt-kind">Terrain tile</span><strong>${TERRAIN_INFO[t].label}</strong><span class="effect">${TERRAIN_INFO[t].describe}</span></span>
         </button>`,
       )
       .join('');
-    showDialog(`
-      <span class="step">Step 2 of 2 · Shape the Battlefield</span>
+    showDialog('Terrain Phase', `Turn ${g.wave}`, `
       <h3>Pick a terrain tile to place</h3>
       <p>Then click an empty hex. Placing it launches wave ${g.wave + 1}.</p>
       <div class="options">${options}</div>`);
@@ -215,8 +236,13 @@ function renderDialog(g: Game): void {
   }
 }
 
-function showDialog(html: string): void {
-  dialog.innerHTML = `<div class="dialog-card">${html}</div>`;
+/** Deal a card from the game deck over the board. */
+function showDialog(phase: string, cardNo: string, body: string): void {
+  dialog.innerHTML = `
+    <div class="dialog-card paper"><div class="frame">
+      <header class="card-head"><span class="phase-name">${phase}</span><span class="card-no">${cardNo}</span></header>
+      <div class="card-body">${body}</div>
+    </div></div>`;
   dialog.hidden = false;
 }
 
@@ -256,18 +282,27 @@ dialog.addEventListener('click', onPanelClick);
 
 // ---- HUD, banners, end screens ----
 
+/** Turn Record Track and Tower Strength track, redrawn only when they change. */
 function renderHud(g: Game): void {
-  $('hud-wave').textContent = `${Math.max(1, g.wave)} / ${FINAL_WAVE}`;
-  $('hud-hp').textContent = `${Math.max(0, g.tower.hp)} / ${g.tower.maxHp}`;
-  const status: Record<string, string> = {
-    ready: 'Deploying counters…',
-    wave: `${g.enemies.length} ${g.enemyType.enemy.name}${g.enemies.length === 1 ? '' : 's'} on the board`,
-    'build-mechanism': 'Build phase: reinforce',
-    'build-terrain': 'Build phase: terrain',
-    victory: 'Victory!',
-    defeat: 'Defeated',
-  };
-  $('hud-status').textContent = status[g.phase];
+  const hp = Math.max(0, Math.ceil(g.tower.hp));
+  const turn = Math.max(1, g.wave);
+  const key = `${turn}:${hp}`;
+  if (key === renderedHud) return;
+  renderedHud = key;
+  $('hud-hp').textContent = `${hp} / ${g.tower.maxHp}`;
+  const turns = $('turn-track');
+  turns.setAttribute('aria-label', `Turn ${turn} of ${FINAL_WAVE}`);
+  turns.innerHTML = Array.from({ length: FINAL_WAVE }, (_, i) => {
+    const n = i + 1;
+    const cls = n < turn ? ' class="done"' : '';
+    return `<li${cls}>${n}${n === turn ? '<span class="marker">Turn</span>' : ''}</li>`;
+  }).join('');
+  const strength = $('strength-track');
+  strength.setAttribute('aria-label', `Tower strength ${hp} of ${g.tower.maxHp}`);
+  strength.innerHTML = Array.from({ length: g.tower.maxHp }, (_, i) => {
+    const n = g.tower.maxHp - i;
+    return `<li${n > hp ? ' class="hit"' : ''}>${n % 5 === 0 ? n : ''}</li>`;
+  }).join('');
 }
 
 let bannerTimer: number | undefined;
@@ -285,16 +320,18 @@ function showEnd(g: Game, won: boolean): void {
   dialog.hidden = true;
   modal.hidden = false;
   modal.innerHTML = `
-    <div class="box">
-      <div class="stripes"><span></span><span></span><span></span></div>
-      <h2>${won ? 'Victory!' : 'Overrun!'}</h2>
-      <p>${
-        won
-          ? `The ${g.player.tower.name} held against all ${FINAL_WAVE} waves of ${g.enemyType.enemy.name}s.`
-          : `The ${g.player.tower.name} fell on wave ${g.wave}.`
-      }</p>
-      <button class="big" id="btn-again">Play Again</button>
-    </div>`;
+    <div class="end-card paper"><div class="frame">
+      <header class="card-head"><span class="phase-name">${won ? 'Victory Conditions Met' : 'Defeat'}</span><span class="card-no">Turn ${g.wave}</span></header>
+      <div class="card-body">
+        <h2>${won ? 'Victory!' : 'Overrun!'}</h2>
+        <p>${
+          won
+            ? `The ${g.player.tower.name} held against all ${FINAL_WAVE} waves of ${g.enemyType.enemy.name}s.`
+            : `The ${g.player.tower.name} fell on wave ${g.wave}.`
+        }</p>
+        <button class="big" id="btn-again">Play Again</button>
+      </div>
+    </div></div>`;
   $('btn-again').addEventListener('click', () => {
     synth.play('click', g.player.side);
     modal.hidden = true;

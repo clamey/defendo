@@ -1,7 +1,12 @@
+/* Defendo's UI is styled as printed matter from a 70s wargame box, laid out on a wooden
+   table: paper charts with 1px ruled boxes, cards from the game deck, die-cut counters.
+   No hard offset shadows or pill chips — real objects cast soft shadows. */
+
 :root {
-  --cream: #f3e7c9;
-  --card: #ead9b0;
-  --ink: #2a1f14;
+  --paper: #efe3c4;
+  --paper-dark: #e0cfa3;
+  --ink: #1f1812;
+  --rule: rgba(31, 24, 18, 0.85);
   --brown: #6e4526;
   --gold: #e3b448;
   --orange: #d9822b;
@@ -9,8 +14,13 @@
   --avocado: #6b8e23;
   --teal: #2f6f8f;
   --space: #2b2540;
-  --display: 'Righteous', 'Arial Black', sans-serif;
-  --mono: 'Space Mono', ui-monospace, monospace;
+  --cream: #f3e7c9;
+  --logo: 'Righteous', 'Arial Black', sans-serif;
+  --chart: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --type: 'Courier Prime', 'Courier New', monospace;
+  /* A card or sheet resting on the table. */
+  --lift: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 14px rgba(0, 0, 0, 0.3);
+  --lift-high: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 24px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -22,19 +32,25 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--cream);
   color: var(--ink);
-  font-family: var(--mono);
+  font-family: var(--type);
 }
 
-/* Cardboard texture: layered gradients, no image assets. */
+/* Walnut tabletop. */
 body {
+  background-color: #4a2f1c;
   background-image:
-    radial-gradient(rgba(110, 69, 38, 0.08) 1px, transparent 1px),
-    radial-gradient(rgba(110, 69, 38, 0.06) 1px, transparent 1px),
-    linear-gradient(180deg, #f3e7c9, #e8d6a8);
-  background-size: 7px 7px, 13px 13px, 100% 100%;
-  background-position: 0 0, 3px 5px, 0 0;
+    repeating-linear-gradient(91deg, rgba(255, 230, 190, 0.035) 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(89deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 27px),
+    repeating-linear-gradient(90.5deg, rgba(0, 0, 0, 0.06) 0 6px, transparent 6px 61px),
+    linear-gradient(90deg, #5a3a22, #4a2f1c 28%, #5e3d24 52%, #47301d 78%, #553821);
+}
+
+/* Printed card stock. */
+.paper {
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(110, 69, 38, 0.07) 1px, transparent 1px);
+  background-size: 5px 5px;
 }
 
 #app {
@@ -49,7 +65,6 @@ body {
   flex: 1;
   min-height: 0;
   width: 100%;
-  margin-top: 12px; /* clear the HUD's stripes */
   cursor: crosshair;
 }
 
@@ -64,91 +79,199 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* ---- HUD ---- */
+/* ---- Chart strip: turn record and tower strength tracks ---- */
 
 #hud {
   order: -1;
   flex: none;
-  height: 56px;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 0 16px;
-  background: var(--ink);
-  color: var(--cream);
-  border-bottom: 6px solid var(--gold);
-  box-shadow: 0 6px 0 var(--orange), 0 12px 0 var(--rust);
+  gap: 18px;
+  margin: 10px auto 0;
+  width: min(980px, calc(100% - 24px));
+  padding: 8px 12px;
+  border-radius: 3px;
+  box-shadow: var(--lift);
   z-index: 2;
 }
 
-.hud-item .label {
-  text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  color: var(--gold);
-}
-
-.hud-item strong {
-  font-family: var(--display);
-  font-size: 22px;
-  font-weight: normal;
-}
-
-.hud-status {
-  flex: 1;
+.track {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
-  text-align: center;
-  font-family: var(--display);
-  font-size: 18px;
+}
+
+.track-label {
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.track-label strong {
+  margin-left: 6px;
+  color: var(--rust);
+  letter-spacing: 0.04em;
+}
+
+.boxes {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+}
+
+.boxes li {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--rule);
+  font-family: var(--chart);
+  font-weight: 600;
+  color: rgba(31, 24, 18, 0.7);
+}
+
+.boxes li:last-child {
+  border-right: none;
+}
+
+.turn-boxes li {
+  width: 30px;
+  height: 28px;
+  font-size: 15px;
+}
+
+.turn-boxes li.done {
+  background: repeating-linear-gradient(135deg, rgba(31, 24, 18, 0.14) 0 2px, transparent 2px 5px);
+}
+
+/* The turn marker: a small die-cut counter sitting in the current box. */
+.marker {
+  position: absolute;
+  inset: 3px;
+  display: grid;
+  place-items: center;
+  background: var(--rust);
+  color: var(--cream);
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 1px 0 #6e2c14, 0 2px 3px rgba(0, 0, 0, 0.4);
+}
+
+.strength {
+  flex: 1;
+}
+
+.strength-boxes li {
+  flex: 1;
+  min-width: 9px;
+  height: 28px;
+  font-size: 11px;
+}
+
+/* Lost strength is crossed out in pencil. */
+.strength-boxes li.hit::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background:
+    linear-gradient(45deg, transparent 46%, var(--rust) 46% 54%, transparent 54%),
+    linear-gradient(-45deg, transparent 46%, var(--rust) 46% 54%, transparent 54%);
 }
 
 .hud-buttons {
   display: flex;
   gap: 8px;
+  margin-left: auto;
 }
 
-.chip {
-  background: var(--cream);
-  color: var(--ink);
-  border: 2px solid var(--gold);
-  border-radius: 999px;
-  padding: 4px 12px;
+/* Round cardboard chits. */
+.chit {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  background: var(--space);
+  color: var(--gold);
+  font-family: var(--chart);
   font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 2px 0 #14101f, 0 3px 6px rgba(0, 0, 0, 0.45);
 }
 
-/* ---- Bottom status bar ---- */
+.chit:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #14101f, 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+.chit[aria-pressed='true'] {
+  color: rgba(227, 180, 72, 0.4);
+  text-decoration: line-through;
+}
+
+/* ---- Sequence of Play strip ---- */
 
 #panel {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  margin: 4px auto 8px;
-  width: min(760px, calc(100% - 32px));
-  padding: 0 6px 0 10px;
-  background: var(--space);
-  color: var(--cream);
-  border: 3px solid var(--ink);
-  border-radius: 8px;
-  box-shadow: 4px 4px 0 var(--brown);
+  gap: 12px;
+  min-height: 42px;
+  margin: 0 auto 10px;
+  width: min(980px, calc(100% - 24px));
+  padding: 6px 8px 6px 12px;
+  border-radius: 3px;
+  box-shadow: var(--lift);
   font-size: 13px;
   z-index: 2;
 }
 
-.step {
+.sop-label {
   flex: none;
-  display: inline-block;
-  background: var(--rust);
-  color: var(--cream);
-  padding: 0 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.1;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  width: 62px;
+}
+
+.phases {
+  flex: none;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+}
+
+.phases li {
+  padding: 3px 10px;
+  border-right: 1px solid var(--rule);
+  font-family: var(--chart);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(31, 24, 18, 0.55);
+  white-space: nowrap;
+}
+
+.phases li:last-child {
+  border-right: none;
+}
+
+.phases li.current {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .bar-text {
@@ -159,27 +282,48 @@ button:focus-visible {
   text-overflow: ellipsis;
 }
 
-.bar-btn {
+.bar-btn,
+.big {
   flex: none;
-  background: var(--gold);
+  background: var(--paper);
   color: var(--ink);
-  border: 2px solid var(--ink);
-  border-radius: 6px;
-  padding: 2px 12px;
-  font-family: var(--display);
+  border: 1px solid var(--ink);
+  outline: 1px solid var(--ink);
+  outline-offset: -4px;
+  border-radius: 2px;
+  font-family: var(--chart);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.bar-btn {
+  padding: 4px 14px;
   font-size: 14px;
 }
 
-/* ---- Between-wave dialog over the board ---- */
+.bar-btn:hover,
+.big:hover {
+  background: var(--gold);
+}
+
+.bar-btn:focus-visible,
+.big:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 2px;
+}
+
+/* ---- Between-wave cards dealt over the board ---- */
 
 #dialog {
   position: absolute;
-  inset: 68px 0 0 0; /* below the HUD and its stripes */
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(26, 18, 12, 0.45);
+  background: rgba(20, 12, 6, 0.45);
   z-index: 3;
 }
 
@@ -187,112 +331,134 @@ button:focus-visible {
   display: none;
 }
 
+/* A card from the game deck: rounded corners, white margin, ruled inner frame. */
 .dialog-card {
+  position: relative;
   width: min(760px, 100%);
   max-height: 100%;
   overflow-y: auto;
-  background: var(--card);
-  border: 3px solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 8px 8px 0 var(--brown);
-  padding: 14px 18px 18px;
-  animation: dialog-in 0.18s ease-out;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: var(--lift-high);
+  animation: deal 0.22s ease-out;
 }
 
-@keyframes dialog-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+.frame {
+  border: 1px solid var(--rule);
+  outline: 2px solid var(--rule);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@keyframes deal {
+  from { opacity: 0; transform: translateY(18px) rotate(-1.5deg); }
   to { opacity: 1; transform: none; }
 }
 
-.dialog-card .step {
-  margin-bottom: 6px;
-}
-
-.dialog-card h3 {
-  margin: 0 0 10px;
-  font-family: var(--display);
-  font-weight: normal;
-  font-size: 24px;
-}
-
-.dialog-card p {
-  margin: -6px 0 12px;
-  font-size: 13px;
-}
-
-/* Terrain choices show the actual tile art. */
-.option.terrain {
+.card-head {
   display: flex;
-  align-items: center;
+  justify-content: space-between;
+  align-items: baseline;
   gap: 12px;
-  padding: 8px 12px 8px 8px;
+  padding: 6px 14px;
+  background: var(--rust);
+  color: var(--paper);
+  border-radius: 5px 5px 0 0;
+  font-family: var(--chart);
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-.option.terrain canvas {
-  flex: none;
-  width: 72px;
-  height: 72px;
+.card-head .phase-name {
+  font-size: 22px;
+  letter-spacing: 0.08em;
 }
 
-.option.terrain strong {
-  font-size: 20px;
+.card-head .card-no {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  opacity: 0.85;
 }
 
-.option.terrain span span {
-  font-size: 12px;
+.card-body {
+  padding: 12px 16px 16px;
+}
+
+.card-body h3 {
+  margin: 0 0 4px;
+  font-family: var(--type);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.card-body p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-style: italic;
 }
 
 .options {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
+/* Choices are smaller cards laid on the big one. */
 .option {
+  position: relative;
   flex: 1 1 140px;
   min-width: 0;
   text-align: left;
-  background: var(--cream);
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  padding: 6px 10px;
-  box-shadow: 3px 3px 0 var(--ink);
-  transition: transform 0.08s, box-shadow 0.08s;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  padding: 8px 10px;
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(110, 69, 38, 0.07) 1px, transparent 1px);
+  background-size: 5px 5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .option:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--ink);
-}
-
-.option:active {
-  transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--ink);
-}
-
-.option.selected {
-  background: var(--gold);
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
 }
 
 .option strong {
   display: block;
-  font-family: var(--display);
-  font-weight: normal;
-  font-size: 16px;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
 }
 
-.option span {
+.opt-kind {
   display: block;
-  font-size: 11px;
-  line-height: 1.35;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--teal);
 }
 
-/* ---- Reinforce step: upgrades vs. build ---- */
+.effect {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--rule);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ---- Reinforce card: upgrades vs. a new piece ---- */
 
 .choice {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .choice .group {
@@ -306,15 +472,18 @@ button:focus-visible {
 }
 
 .choice .group:last-child {
-  flex: 1.4 1 0;
+  flex: 1.5 1 0;
 }
 
 .group-label {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--brown);
-  margin-bottom: 4px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 2px;
+  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -322,10 +491,9 @@ button:focus-visible {
 
 .choice .or {
   align-self: center;
-  margin-top: 14px;
-  font-family: var(--display);
-  font-size: 15px;
-  color: var(--rust);
+  margin-top: 18px;
+  font-style: italic;
+  font-size: 14px;
 }
 
 .choice .options {
@@ -334,137 +502,118 @@ button:focus-visible {
   gap: 8px;
 }
 
-/* Upgrades: compact cream cards with a gold up-chevron. */
 .option.upgrade {
-  position: relative;
   flex: 1 1 0;
-  padding: 6px 8px 6px 26px;
 }
 
-.option.upgrade::before {
-  content: '▲';
-  position: absolute;
-  left: 7px;
-  top: 7px;
-  font-size: 12px;
-  color: var(--orange);
-}
-
-.option.upgrade strong {
-  font-size: 15px;
-}
-
-.option.upgrade .chip {
-  display: inline-block;
-  margin-top: 3px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--gold);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-/* Build: a dark "new piece" card showing the actual counter. */
+/* A new piece still on its counter sheet, waiting to be punched out. */
 .option.build {
-  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
-  background: var(--space);
-  color: var(--cream);
-  border: 2px dashed var(--gold);
-  box-shadow: 3px 3px 0 var(--rust);
+  gap: 10px;
+  padding: 8px 10px 8px 8px;
+  background-color: var(--paper-dark);
+  background-image:
+    radial-gradient(rgba(110, 69, 38, 0.1) 1px, transparent 1px);
 }
 
-.option.build:hover {
-  box-shadow: 4px 4px 0 var(--rust);
-}
-
-.option.build:active {
-  box-shadow: 1px 1px 0 var(--rust);
-}
-
-.option.build canvas {
+.sheet {
   flex: none;
-  width: 44px;
-  height: 44px;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 1px dashed rgba(31, 24, 18, 0.55);
 }
 
-.option.build .build-text {
+.sheet canvas {
+  width: 46px;
+  height: 46px;
+}
+
+.build-text {
   min-width: 0;
 }
 
-.option.build strong {
-  color: var(--gold);
+.build-text .opt-kind {
+  color: var(--rust);
 }
 
+/* Rubber stamp. */
 .stamp {
   position: absolute;
-  top: -8px;
-  right: -6px;
-  padding: 0 6px;
-  background: var(--rust);
-  color: var(--cream);
-  border: 2px solid var(--ink);
-  border-radius: 4px;
-  font-family: var(--display);
-  font-size: 11px;
+  top: 6px;
+  right: 8px;
+  padding: 0 5px;
+  border: 2px solid rgba(200, 53, 43, 0.75);
+  border-radius: 3px;
+  color: rgba(200, 53, 43, 0.75);
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  transform: rotate(6deg);
+  transform: rotate(8deg);
 }
 
-@media (max-width: 640px) {
-  #panel {
-    height: auto;
-    min-height: 40px;
-    padding: 6px 6px 6px 10px;
-    flex-wrap: wrap;
-  }
-  .bar-text {
-    white-space: normal;
-  }
-  .choice {
-    flex-direction: column;
-    gap: 6px;
-  }
-  .choice .or {
-    display: none;
-  }
+/* ---- Terrain card: die-cut hex tiles ---- */
+
+.option.terrain {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px 10px 10px;
 }
 
-/* ---- Banner ---- */
+.option.terrain canvas {
+  flex: none;
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 2px 0 #8a7650) drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35));
+}
+
+.option.terrain strong {
+  font-size: 24px;
+}
+
+/* ---- Wave announcement: a paper slip tossed onto the board ---- */
 
 #banner {
   position: absolute;
-  top: 40%;
+  top: 38%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  padding: 10px 28px 12px;
   text-align: center;
   pointer-events: none;
   z-index: 3;
-  font-family: var(--display);
-  font-size: clamp(40px, 9vw, 96px);
-  color: var(--gold);
-  text-shadow: 3px 3px 0 var(--orange), 6px 6px 0 var(--rust), 9px 9px 0 var(--ink);
-  animation: banner 1.8s ease-out forwards;
+  border-radius: 3px;
+  box-shadow: var(--lift-high);
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: clamp(36px, 7vw, 64px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+  animation: slip 1.8s ease-out forwards;
 }
 
 #banner small {
   display: block;
-  font-family: var(--mono);
-  font-size: 16px;
-  color: var(--cream);
-  text-shadow: 2px 2px 0 var(--ink);
+  margin-top: 6px;
+  font-family: var(--type);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-style: italic;
 }
 
-@keyframes banner {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
-  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
-  25% { transform: translate(-50%, -50%) scale(1); }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
+@keyframes slip {
+  0% { opacity: 0; transform: translate(-50%, -70%) rotate(-6deg); }
+  14% { opacity: 1; transform: translate(-50%, -50%) rotate(-2deg); }
+  80% { opacity: 1; transform: translate(-50%, -50%) rotate(-2deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(-2deg); }
 }
 
 /* ---- Full screens ---- */
@@ -478,7 +627,6 @@ button:focus-visible {
   justify-content: center;
   padding: 16px;
   z-index: 5;
-  background: inherit;
 }
 
 .screen[hidden],
@@ -488,24 +636,15 @@ button:focus-visible {
   display: none;
 }
 
-#title,
-#pick {
-  background-color: var(--cream);
-  background-image:
-    radial-gradient(rgba(110, 69, 38, 0.08) 1px, transparent 1px),
-    linear-gradient(180deg, #f3e7c9, #e8d6a8);
-  background-size: 7px 7px, 100% 100%;
-}
-
+/* The box lid. */
 .box {
   position: relative;
   width: min(640px, 100%);
   padding: 40px 32px 32px;
   background: var(--space);
   color: var(--cream);
-  border: 6px solid var(--ink);
-  border-radius: 6px;
-  box-shadow: 12px 12px 0 var(--brown);
+  border-radius: 4px;
+  box-shadow: 0 3px 0 #17121f, 0 4px 0 #0e0b14, var(--lift-high);
   text-align: center;
   overflow: hidden;
 }
@@ -527,27 +666,30 @@ button:focus-visible {
 
 .publisher {
   margin: 0;
-  font-size: 13px;
-  letter-spacing: 0.25em;
+  font-family: var(--chart);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
 h1 {
   margin: 8px 0 0;
-  font-family: var(--display);
+  font-family: var(--logo);
   font-weight: normal;
   font-size: clamp(56px, 14vw, 120px);
   line-height: 1;
   color: var(--gold);
-  text-shadow: 4px 4px 0 var(--orange), 8px 8px 0 var(--rust), 12px 12px 0 var(--brown);
+  text-shadow: 4px 4px 0 var(--orange), 8px 8px 0 var(--rust);
 }
 
 .subtitle {
   margin: 18px 0 20px;
-  font-family: var(--display);
-  font-size: clamp(16px, 3.5vw, 22px);
-  letter-spacing: 0.08em;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: clamp(17px, 3.5vw, 24px);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -558,82 +700,104 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  border: 1px solid rgba(227, 180, 72, 0.7);
+  width: fit-content;
+  margin-inline: auto;
 }
 
 .badges li {
-  border: 2px solid var(--gold);
-  border-radius: 999px;
-  padding: 2px 12px;
-  font-size: 12px;
+  padding: 4px 12px;
+  border-right: 1px solid rgba(227, 180, 72, 0.7);
+  font-family: var(--chart);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.badges li:last-child {
+  border-right: none;
 }
 
 .big {
-  font-family: var(--display);
-  font-size: 22px;
-  padding: 12px 28px;
+  font-size: 20px;
+  padding: 12px 30px;
   margin-bottom: 16px;
-  background: var(--gold);
-  color: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 8px;
-  box-shadow: 5px 5px 0 var(--rust);
 }
 
-.big:active {
-  transform: translate(3px, 3px);
-  box-shadow: 2px 2px 0 var(--rust);
-}
-
-#pick h2,
-#modal h2 {
-  font-family: var(--display);
-  font-weight: normal;
-  font-size: clamp(30px, 6vw, 52px);
+#pick h2 {
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: clamp(28px, 5vw, 44px);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   margin: 0 0 24px;
-  color: var(--rust);
-  text-shadow: 3px 3px 0 var(--gold);
+  color: var(--paper);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .cards {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 24px;
+  gap: 28px;
   width: min(820px, 100%);
 }
 
+/* Player aid cards. */
 .card {
   flex: 1 1 300px;
   max-width: 380px;
   min-width: 0;
-  padding: 20px;
-  border: 4px solid var(--ink);
-  border-radius: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
   text-align: left;
-  color: var(--cream);
-  box-shadow: 8px 8px 0 var(--ink);
-  transition: transform 0.1s, box-shadow 0.1s;
+  overflow: hidden;
+  background-color: var(--paper);
+  background-image: radial-gradient(rgba(110, 69, 38, 0.07) 1px, transparent 1px);
+  background-size: 5px 5px;
+  box-shadow: var(--lift);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 
 .card:hover {
-  transform: translate(-3px, -3px) rotate(-0.5deg);
-  box-shadow: 11px 11px 0 var(--ink);
+  transform: translateY(-4px) rotate(-0.6deg);
+  box-shadow: var(--lift-high);
 }
 
-.card[data-side='human'] { background: var(--teal); }
-.card[data-side='monster'] { background: var(--avocado); }
+.card-band {
+  display: block;
+  padding: 10px 16px 8px;
+  color: var(--paper);
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+}
 
-.card h3 {
-  margin: 0 0 4px;
-  font-family: var(--display);
-  font-weight: normal;
-  font-size: 28px;
+.card[data-side='human'] .card-band { background: var(--teal); }
+.card[data-side='monster'] .card-band { background: var(--avocado); }
+
+.card-band small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  opacity: 0.85;
+}
+
+.card-inner {
+  display: block;
+  padding: 12px 16px 16px;
 }
 
 .card p {
   margin: 0 0 12px;
   font-size: 13px;
+  font-style: italic;
 }
 
 .card canvas {
@@ -641,52 +805,106 @@ h1 {
   height: 110px;
   display: block;
   background: var(--space);
-  border: 3px solid var(--ink);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
   margin-bottom: 12px;
 }
 
 .card dl {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 2px 12px;
   margin: 0;
   font-size: 13px;
+  border: 1px solid var(--rule);
+}
+
+.card dt,
+.card dd {
+  margin: 0;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.card dt:last-of-type,
+.card dd:last-of-type {
+  border-bottom: none;
 }
 
 .card dt {
-  color: var(--gold);
+  border-right: 1px solid var(--rule);
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  align-self: center;
+  align-self: stretch;
 }
 
-.card dd {
-  margin: 0;
-}
-
+/* End-of-game card. */
 #modal {
-  background: rgba(42, 31, 20, 0.6);
+  background: rgba(20, 12, 6, 0.55);
 }
 
-#modal .box h2 {
-  color: var(--gold);
-  text-shadow: 3px 3px 0 var(--rust);
+.end-card {
+  width: min(460px, 100%);
+  padding: 10px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: var(--lift-high);
+  animation: deal 0.25s ease-out;
 }
 
-#modal .box p {
-  margin: 0 0 24px;
+.end-card .card-body {
+  padding: 20px 20px 8px;
+}
+
+.end-card h2 {
+  margin: 0 0 8px;
+  font-family: var(--chart);
+  font-weight: 700;
+  font-size: 44px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.end-card p {
+  font-style: normal;
+  font-size: 14px;
+  margin: 0 0 20px;
 }
 
 @media (max-width: 640px) {
   #hud {
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
-  .hud-status {
+  .strength {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .chit {
+    width: 38px;
+    height: 38px;
+  }
+  #panel {
+    flex-wrap: wrap;
+  }
+  .sop-label {
     display: none;
   }
-  .hud-item strong {
-    font-size: 18px;
+  .phases li {
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+  .bar-text {
+    white-space: normal;
+    flex-basis: 100%;
+    order: 3;
+  }
+  .choice {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .choice .or {
+    display: none;
   }
 }

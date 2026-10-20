@@ -9,6 +9,17 @@ const SPACE = '#2b2540';
 const SPACE_LINE = 'rgba(243, 231, 201, 0.22)';
 const EDGE_TINT = 'rgba(200, 85, 43, 0.28)';
 const ACID = '#9bbf3a';
+const MAP_PRINT = '#231d35';
+/** World units of margin around the hexes, and extra room at the top for the title. */
+const MAP_PAD = 0.9;
+const TITLE_BAND = 1.0;
+
+/** World-space rectangle covered by the mounted map board. */
+function mapBounds(board: Board): { left: number; right: number; top: number; bottom: number } {
+  const halfW = (Math.sqrt(3) * (2 * board.radius + 1)) / 2 + MAP_PAD;
+  const halfH = (3 * board.radius + 2) / 2 + MAP_PAD;
+  return { left: -halfW, right: halfW, top: -halfH - TITLE_BAND, bottom: halfH };
+}
 
 /** How each laser-type weapon's shot looks: streak length (world units), glow and core colors, twin beams. */
 const BEAMS: Partial<Record<Weapon, { length: number; width: number; glow: string; core: string; twin?: boolean }>> = {
@@ -46,6 +57,8 @@ export class Renderer {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
+    // The map's printed lettering needs the web fonts; repaint once they arrive.
+    void document.fonts?.ready.then(() => (this.boardCacheKey = ''));
   }
 
   resize(board: Board): void {
@@ -53,10 +66,15 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     this.canvas.width = Math.round(rect.width * this.dpr);
     this.canvas.height = Math.round(rect.height * this.dpr);
-    const worldW = Math.sqrt(3) * (2 * board.radius + 1);
-    const worldH = 3 * board.radius + 2;
-    this.scale = Math.min(this.canvas.width / worldW, this.canvas.height / worldH) * 0.94;
-    this.origin = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
+    const map = mapBounds(board);
+    const worldW = map.right - map.left;
+    const worldH = map.bottom - map.top;
+    this.scale = Math.min(this.canvas.width / worldW, this.canvas.height / worldH) * 0.97;
+    // Center the whole mounted map (title band included), not just the hexes.
+    this.origin = {
+      x: this.canvas.width / 2 - ((map.left + map.right) / 2) * this.scale,
+      y: this.canvas.height / 2 - ((map.top + map.bottom) / 2) * this.scale,
+    };
     this.boardCacheKey = '';
   }
 
@@ -161,6 +179,8 @@ export class Renderer {
       ctx.closePath();
     };
 
+    this.paintMapboard(ctx, board);
+
     // Printed space map.
     for (const h of board.allHexes()) {
       outline(h);
@@ -207,7 +227,7 @@ export class Renderer {
     // Hex numbers in the corner of each hex, the classic wargame map touch.
     if (this.scale > 24) {
       ctx.fillStyle = 'rgba(243, 231, 201, 0.16)';
-      ctx.font = `${Math.round(this.scale * 0.18)}px "Space Mono", monospace`;
+      ctx.font = `${Math.round(this.scale * 0.18)}px "Barlow Condensed", sans-serif`;
       ctx.textAlign = 'center';
       for (const h of board.allHexes()) {
         const c = this.toScreen(hexToWorld(h));
@@ -215,6 +235,51 @@ export class Renderer {
         ctx.fillText(label, c.x, c.y - this.scale * 0.62);
       }
     }
+  }
+
+  /** The mounted map board: cardboard edge, printed border rules, and title cartouche. */
+  private paintMapboard(ctx: CanvasRenderingContext2D, board: Board): void {
+    const m = mapBounds(board);
+    const tl = this.toScreen({ x: m.left, y: m.top });
+    const br = this.toScreen({ x: m.right, y: m.bottom });
+    const w = br.x - tl.x;
+    const h = br.y - tl.y;
+    const s = this.scale;
+
+    // Board resting on the table: soft shadow plus a thick cardboard edge.
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = s * 0.6;
+    ctx.shadowOffsetY = s * 0.15;
+    ctx.fillStyle = '#1a1424';
+    ctx.fillRect(tl.x, tl.y + s * 0.08, w, h);
+    ctx.restore();
+    ctx.fillStyle = MAP_PRINT;
+    ctx.fillRect(tl.x, tl.y, w, h);
+
+    // Double border rule.
+    ctx.strokeStyle = 'rgba(243, 231, 201, 0.55)';
+    ctx.lineWidth = Math.max(1, s * 0.05);
+    ctx.strokeRect(tl.x + s * 0.25, tl.y + s * 0.25, w - s * 0.5, h - s * 0.5);
+    ctx.lineWidth = Math.max(1, s * 0.02);
+    ctx.strokeRect(tl.x + s * 0.38, tl.y + s * 0.38, w - s * 0.76, h - s * 0.76);
+
+    // Title cartouche, top left.
+    const titleY = tl.y + s * 0.38 + TITLE_BAND * s * 0.62;
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = GOLD;
+    ctx.font = `${Math.round(s * 0.75)}px Righteous, sans-serif`;
+    ctx.fillText('Defendo', tl.x + s * 0.7, titleY);
+    const logoW = ctx.measureText('Defendo').width;
+    ctx.fillStyle = CREAM;
+    ctx.font = `700 ${Math.round(s * 0.36)}px "Barlow Condensed", sans-serif`;
+    ctx.fillText('TACTICAL MAP · SECTOR 7', tl.x + s * 0.95 + logoW, titleY);
+    // Scale note, top right.
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(243, 231, 201, 0.6)';
+    ctx.font = `600 ${Math.round(s * 0.3)}px "Barlow Condensed", sans-serif`;
+    ctx.fillText('1 HEX = 1 PARSEC  ·  ORANGE HEXES: ENEMY ENTRY', br.x - s * 0.7, titleY);
   }
 
   private paintNebula(ctx: CanvasRenderingContext2D, h: Hex): void {

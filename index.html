@@ -5,27 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Defendo</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cpolygon points=%2716,1 29,8.5 29,23.5 16,31 3,23.5 3,8.5%27 fill=%27%232b2540%27 stroke=%27%23e3b448%27 stroke-width=%272%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23c8552b%27/%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <main id="app">
       <canvas id="board" aria-label="Game board"></canvas>
 
-      <header id="hud" hidden>
-        <div class="hud-item"><span class="label">Wave</span> <strong id="hud-wave">1 / 5</strong></div>
-        <div class="hud-item"><span class="label" id="hud-tower-name">Tower</span> <strong id="hud-hp">20 / 20</strong></div>
-        <div class="hud-item hud-status" id="hud-status"></div>
+      <header id="hud" class="paper" hidden>
+        <div class="track">
+          <span class="track-label">Turn Record Track</span>
+          <ol class="boxes turn-boxes" id="turn-track"></ol>
+        </div>
+        <div class="track strength">
+          <span class="track-label"><span id="hud-tower-name">Tower</span> Strength<strong id="hud-hp">20 / 20</strong></span>
+          <ol class="boxes strength-boxes" id="strength-track"></ol>
+        </div>
         <div class="hud-buttons">
-          <button id="btn-speed" class="chip" title="Game speed">1×</button>
-          <button id="btn-mute" class="chip" title="Sound on/off">♪ On</button>
+          <button id="btn-speed" class="chit" title="Game speed" aria-label="Game speed 1×">1×</button>
+          <button id="btn-mute" class="chit" title="Sound on/off" aria-label="Sound" aria-pressed="false">♪</button>
         </div>
       </header>
 
-      <section id="panel" hidden></section>
+      <section id="panel" class="paper" hidden></section>
       <section id="dialog" hidden aria-live="polite"></section>
-      <div id="banner" hidden></div>
+      <div id="banner" class="paper" hidden></div>
 
       <section id="title" class="screen">
         <div class="box">

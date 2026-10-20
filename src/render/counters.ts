@@ -49,7 +49,7 @@ function humanChit(ctx: CanvasRenderingContext2D, size: number): void {
 function statLine(ctx: CanvasRenderingContext2D, size: number, text: string, color: string): void {
   if (size < 14) return;
   ctx.fillStyle = color;
-  ctx.font = `bold ${Math.round(size * 0.36)}px "Space Mono", monospace`;
+  ctx.font = `700 ${Math.round(size * 0.42)}px "Barlow Condensed", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, 0, size * 0.85);
