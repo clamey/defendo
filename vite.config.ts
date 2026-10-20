@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
-// GitHub Pages serves the site from /defendo/, so built asset URLs need that prefix.
+// Relative asset paths, so the build works both at the domain root (defendo.net)
+// and under a subpath (clamey.github.io/defendo/).
 export default defineConfig({
-  base: process.env.GITHUB_PAGES ? '/defendo/' : '/',
+  base: './',
 });
