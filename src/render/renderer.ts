@@ -3,6 +3,7 @@ import type { Board } from '../board';
 import type { Game, GameEvent, Projectile } from '../game';
 import { type Hex, type Point, hexCorners, hexDistance, hexToWorld, worldToHex } from '../hex';
 import { CREAM, GOLD, INK, RUST, drawEnemy, drawMechanism, drawTower } from './counters';
+import { drawAsteroid, drawNebula, hexSeed } from './terrain';
 
 const SPACE = '#2b2540';
 const SPACE_LINE = 'rgba(243, 231, 201, 0.22)';
@@ -184,8 +185,8 @@ export class Renderer {
     // Terrain.
     for (const h of board.allHexes()) {
       const t = board.terrainAt(h);
-      if (t === 'nebula') this.paintNebula(ctx, h, rand);
-      if (t === 'asteroid') this.paintAsteroid(ctx, h, rand);
+      if (t === 'nebula') this.paintNebula(ctx, h);
+      if (t === 'asteroid') this.paintAsteroid(ctx, h);
     }
     // Hex grid lines.
     ctx.strokeStyle = SPACE_LINE;
@@ -216,67 +217,25 @@ export class Renderer {
     }
   }
 
-  private paintNebula(ctx: CanvasRenderingContext2D, h: Hex, rand: () => number): void {
+  private paintNebula(ctx: CanvasRenderingContext2D, h: Hex): void {
     const c = this.toScreen(hexToWorld(h));
-    const s = this.scale;
     const pts = hexCorners(hexToWorld(h)).map((p) => this.toScreen(p));
     ctx.save();
     ctx.beginPath();
     pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
     ctx.closePath();
     ctx.clip();
-    const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, s);
-    g.addColorStop(0, 'rgba(196, 92, 160, 0.85)');
-    g.addColorStop(1, 'rgba(107, 142, 35, 0.55)');
-    ctx.fillStyle = g;
-    ctx.fill();
-    // Stipple dots, like a halftone print.
-    ctx.fillStyle = 'rgba(243, 231, 201, 0.35)';
-    for (let i = 0; i < 40; i++) {
-      ctx.beginPath();
-      ctx.arc(c.x + (rand() - 0.5) * s * 2, c.y + (rand() - 0.5) * s * 2, s * 0.03, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Swirl.
-    ctx.strokeStyle = 'rgba(243, 231, 201, 0.45)';
-    ctx.lineWidth = s * 0.06;
-    ctx.beginPath();
-    for (let a = 0; a < Math.PI * 3; a += 0.2) {
-      const r = (a / (Math.PI * 3)) * s * 0.7;
-      const x = c.x + Math.cos(a) * r;
-      const y = c.y + Math.sin(a) * r * 0.8;
-      if (a === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    ctx.translate(c.x, c.y);
+    drawNebula(ctx, this.scale, hexSeed(h.q, h.r));
     ctx.restore();
   }
 
-  private paintAsteroid(ctx: CanvasRenderingContext2D, h: Hex, rand: () => number): void {
+  private paintAsteroid(ctx: CanvasRenderingContext2D, h: Hex): void {
     const c = this.toScreen(hexToWorld(h));
-    const s = this.scale;
-    const rock = (dx: number, dy: number, r: number, fill: string) => {
-      ctx.beginPath();
-      const n = 9;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2;
-        const rr = r * (0.75 + rand() * 0.35);
-        const x = c.x + dx + Math.cos(a) * rr;
-        const y = c.y + dy + Math.sin(a) * rr;
-        if (i) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1, s * 0.05);
-      ctx.stroke();
-    };
-    rock(s * 0.08, s * 0.1, s * 0.62, 'rgba(20, 12, 6, 0.6)');
-    rock(0, 0, s * 0.6, '#8a5a32');
-    rock(-s * 0.15, -s * 0.15, s * 0.22, '#a8743f');
-    rock(s * 0.22, s * 0.15, s * 0.14, '#6e4526');
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    drawAsteroid(ctx, this.scale, hexSeed(h.q, h.r));
+    ctx.restore();
   }
 
   // ---- Dynamic layers ----
