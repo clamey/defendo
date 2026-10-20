@@ -1,11 +1,13 @@
-import type { Side } from '../biotypes';
+import type { Side, Weapon } from '../biotypes';
 import type { GameEvent } from '../game';
 
 // Every sound is synthesized with the Web Audio API — no sample files.
-// Humans sound clean and military (square waves, crisp sweeps, radio chirps).
-// Monsters sound organic and warbly (triangle/saw with vibrato, filtered noise gurgles).
+// Weapons each have their own firing and impact sounds (lasers zap, acid splorps and
+// sizzles, claws hiss and slash). Everything else uses a per-side voice: humans sound
+// clean and military (square waves, radio chirps); monsters sound organic and warbly.
 
-type SoundName = GameEvent['type'] | 'click';
+/** Sounds that come from a side's voice rather than from a weapon. */
+type SoundName = Exclude<GameEvent['type'], 'fire' | 'hit' | 'melee'> | 'click';
 
 interface ToneOpts {
   type?: OscillatorType;
@@ -57,17 +59,33 @@ export class Synth {
   }
 
   play(name: SoundName, side: Side): void {
-    if (!this.ctx || this.muted) return;
-    // Throttle rapid repeats (lots of turrets firing at once) so the mix doesn't clip.
-    const key = `${name}:${side}`;
-    const now = this.ctx.currentTime;
-    if (now - (this.lastPlayed.get(key) ?? -1) < MIN_GAP[name]) return;
-    this.lastPlayed.set(key, now);
+    if (this.throttled(`${name}:${side}`, MIN_GAP[name])) return;
     (side === 'human' ? HUMAN : MONSTER)[name](this);
   }
 
   playEvent(e: GameEvent): void {
-    this.play(e.type, e.side);
+    switch (e.type) {
+      case 'fire':
+        if (!this.throttled(`fire:${e.weapon}`, 0.07)) WEAPON_FIRE[e.weapon](this);
+        break;
+      case 'melee':
+        if (!this.throttled('fire:claws', 0.12)) WEAPON_FIRE.claws(this);
+        break;
+      case 'hit':
+        if (!this.throttled(`hit:${e.weapon}`, 0.05)) WEAPON_HIT[e.weapon](this);
+        break;
+      default:
+        this.play(e.type, e.side);
+    }
+  }
+
+  /** Throttle rapid repeats (lots of turrets firing at once) so the mix doesn't clip. */
+  private throttled(key: string, gap: number): boolean {
+    if (!this.ctx || this.muted) return true;
+    const now = this.ctx.currentTime;
+    if (now - (this.lastPlayed.get(key) ?? -1) < gap) return true;
+    this.lastPlayed.set(key, now);
+    return false;
   }
 
   tone({ type = 'square', freq, to, start = 0, dur, gain = 0.3, vibrato, lowpass }: ToneOpts): void {
@@ -136,8 +154,6 @@ export class Synth {
 }
 
 const MIN_GAP: Record<SoundName, number> = {
-  fire: 0.07,
-  hit: 0.05,
   enemyDeath: 0.06,
   towerDamaged: 0.15,
   waveStart: 0.5,
@@ -148,16 +164,67 @@ const MIN_GAP: Record<SoundName, number> = {
   click: 0.03,
 };
 
-type Voice = Record<SoundName, (s: Synth) => void>;
+type Sound = (s: Synth) => void;
+
+/** Laser impact: short metallic click-tick. */
+const laserHit: Sound = (s) => {
+  s.tone({ freq: 2200, dur: 0.03, gain: 0.08 });
+  s.noise({ freq: 4000, dur: 0.04, gain: 0.08, filter: 'highpass' });
+};
+
+/** Acid impact: wet splat, then a hissing sizzle. */
+const acidHit: Sound = (s) => {
+  s.noise({ freq: 500, to: 1400, dur: 0.06, gain: 0.16, q: 8 });
+  s.noise({ start: 0.04, freq: 5000, to: 2500, dur: 0.35, gain: 0.07, filter: 'highpass' });
+};
+
+const WEAPON_FIRE: Record<Weapon, Sound> = {
+  // Laser Bastion: twin cannons, two square-wave "pew"s a hair apart, with a zap of static.
+  twinLaser: (s) => {
+    s.tone({ freq: 1500, to: 300, dur: 0.12, gain: 0.11 });
+    s.tone({ freq: 1250, to: 260, start: 0.045, dur: 0.12, gain: 0.1 });
+    s.noise({ freq: 3000, dur: 0.05, gain: 0.05, q: 2 });
+  },
+  // Sentry Gun: quick, high sawtooth blip-zap.
+  sentryLaser: (s) => s.tone({ type: 'sawtooth', freq: 2400, to: 900, dur: 0.06, gain: 0.07, lowpass: 5000 }),
+  // Trooper pistol: thin, light "pew".
+  pistol: (s) => s.tone({ type: 'triangle', freq: 1700, to: 500, dur: 0.1, gain: 0.12 }),
+  // Trooper rifle: a crackling beam — static burst then a long, buzzy falling zap.
+  rifle: (s) => {
+    s.noise({ freq: 2500, dur: 0.06, gain: 0.09, q: 1.5 });
+    s.tone({ type: 'sawtooth', freq: 950, to: 180, dur: 0.24, gain: 0.1, vibrato: [60, 40], lowpass: 3000 });
+  },
+  // Brood Spire: a deep wet hork, then the "PTOO" of a big glob launching.
+  spireSpit: (s) => {
+    s.noise({ freq: 250, to: 900, dur: 0.14, gain: 0.2, filter: 'lowpass', q: 8 });
+    s.tone({ type: 'triangle', freq: 260, to: 80, start: 0.1, dur: 0.18, gain: 0.18, vibrato: [25, 30] });
+    s.noise({ start: 0.1, freq: 1200, to: 400, dur: 0.08, gain: 0.12, q: 4 });
+  },
+  // Spitter Pod: a smaller, quicker "ptoo".
+  podSpit: (s) => {
+    s.noise({ freq: 1400, to: 600, dur: 0.06, gain: 0.12, q: 5 });
+    s.tone({ type: 'triangle', freq: 520, to: 200, dur: 0.09, gain: 0.12, vibrato: [35, 30] });
+  },
+  // Crawler claws: a screeching hiss, then a slashing "shhk".
+  claws: (s) => {
+    s.tone({ type: 'sawtooth', freq: 900, to: 1500, dur: 0.12, gain: 0.07, vibrato: [45, 80], lowpass: 3500 });
+    s.noise({ start: 0.05, freq: 7000, to: 1800, dur: 0.12, gain: 0.16, filter: 'highpass' });
+  },
+};
+
+const WEAPON_HIT: Record<Weapon, Sound> = {
+  twinLaser: laserHit,
+  sentryLaser: laserHit,
+  pistol: laserHit,
+  rifle: laserHit,
+  spireSpit: acidHit,
+  podSpit: acidHit,
+  claws: laserHit,
+};
+
+type Voice = Record<SoundName, Sound>;
 
 const HUMAN: Voice = {
-  // "Pew": square wave diving in pitch.
-  fire: (s) => s.tone({ freq: 1400, to: 320, dur: 0.12, gain: 0.12 }),
-  // Short metallic click-tick.
-  hit: (s) => {
-    s.tone({ freq: 2200, dur: 0.03, gain: 0.08 });
-    s.noise({ freq: 4000, dur: 0.04, gain: 0.08, filter: 'highpass' });
-  },
   // Three-note descending arpeggio.
   enemyDeath: (s) => s.arp([880, 660, 440], 0.06, { dur: 0.08, gain: 0.12 }),
   // Two-tone alarm buzz.
@@ -184,13 +251,6 @@ const HUMAN: Voice = {
 };
 
 const MONSTER: Voice = {
-  // Wet "splorp": filtered noise burst plus a wobbly falling tone.
-  fire: (s) => {
-    s.noise({ freq: 900, to: 250, dur: 0.12, gain: 0.18, filter: 'lowpass', q: 6 });
-    s.tone({ type: 'triangle', freq: 500, to: 160, dur: 0.14, gain: 0.14, vibrato: [30, 40] });
-  },
-  // Squelch.
-  hit: (s) => s.noise({ freq: 600, to: 1600, dur: 0.07, gain: 0.16, q: 8 }),
   // Gurgle that falls into a low growl.
   enemyDeath: (s) => {
     s.noise({ freq: 700, to: 200, dur: 0.25, gain: 0.18, filter: 'lowpass', q: 10 });

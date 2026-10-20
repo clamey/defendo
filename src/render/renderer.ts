@@ -1,11 +1,21 @@
+import { ARCING_WEAPONS, type Weapon } from '../biotypes';
 import type { Board } from '../board';
-import type { Game, GameEvent } from '../game';
+import type { Game, GameEvent, Projectile } from '../game';
 import { type Hex, type Point, hexCorners, hexDistance, hexToWorld, worldToHex } from '../hex';
 import { CREAM, GOLD, INK, RUST, drawEnemy, drawMechanism, drawTower } from './counters';
 
 const SPACE = '#2b2540';
 const SPACE_LINE = 'rgba(243, 231, 201, 0.22)';
 const EDGE_TINT = 'rgba(200, 85, 43, 0.28)';
+const ACID = '#9bbf3a';
+
+/** How each laser-type weapon's shot looks: streak length (world units), glow and core colors, twin beams. */
+const BEAMS: Partial<Record<Weapon, { length: number; width: number; glow: string; core: string; twin?: boolean }>> = {
+  twinLaser: { length: 0.6, width: 0.07, glow: 'rgba(227, 180, 72, 0.4)', core: '#fff3c4', twin: true },
+  sentryLaser: { length: 0.4, width: 0.05, glow: 'rgba(255, 140, 60, 0.4)', core: '#ffe2b0' },
+  pistol: { length: 0.3, width: 0.08, glow: 'rgba(255, 70, 50, 0.45)', core: '#ffd2a0' },
+  rifle: { length: 1.1, width: 0.04, glow: 'rgba(255, 50, 50, 0.4)', core: '#ffe0d0' },
+};
 
 export interface Hover {
   hex: Hex;
@@ -15,7 +25,7 @@ export interface Hover {
 }
 
 interface Effect {
-  kind: 'burst' | 'splat' | 'ring' | 'pop';
+  kind: 'burst' | 'splat' | 'ring' | 'pop' | 'flash' | 'slash' | 'smoke';
   pos: Point;
   age: number;
   life: number;
@@ -63,8 +73,19 @@ export class Renderer {
       case 'enemyDeath':
         add(e.side === 'human' ? 'burst' : 'splat', e.pos, 0.5, e.side === 'human' ? GOLD : '#9bbf3a');
         break;
+      case 'fire':
+        add('flash', e.pos, 0.12, ARCING_WEAPONS.has(e.weapon) ? ACID : (BEAMS[e.weapon]?.core ?? CREAM));
+        break;
       case 'hit':
-        add('pop', e.pos, 0.2, CREAM);
+        if (ARCING_WEAPONS.has(e.weapon)) {
+          add('splat', e.pos, 0.35, ACID);
+          add('smoke', e.pos, 0.6, 'rgba(200, 220, 150, 0.6)');
+        } else {
+          add('pop', e.pos, 0.2, BEAMS[e.weapon]?.core ?? CREAM);
+        }
+        break;
+      case 'melee':
+        add('slash', e.pos, 0.35, '#e0402a');
         break;
       case 'towerDamaged':
         add('ring', e.pos, 0.5, RUST);
@@ -100,7 +121,15 @@ export class Renderer {
     this.drawTowerHp(game);
 
     for (const e of game.enemies) {
-      this.at(e.pos, () => drawEnemy(ctx, game.enemyType, s * 0.45, e.wobble));
+      this.at(e.pos, () => {
+        const dx = game.tower.pos.x - e.pos.x;
+        const dy = game.tower.pos.y - e.pos.y;
+        const d = Math.hypot(dx, dy) || 1;
+        // Crawlers lunge at the tower when they claw; troopers turn to face it.
+        if (game.enemyType.side === 'monster') ctx.translate((dx / d) * e.attackAnim * s * 0.4, (dy / d) * e.attackAnim * s * 0.4);
+        else if (dx < 0) ctx.scale(-1, 1);
+        drawEnemy(ctx, game.enemyType, s * 0.6, e.wobble, e.id, e.weapon, e.attackAnim);
+      });
       if (e.hp < e.maxHp) this.drawPips(e.pos, e.hp, e.maxHp);
     }
     this.drawProjectiles(game);
@@ -316,30 +345,65 @@ export class Renderer {
   }
 
   private drawProjectiles(game: Game): void {
-    const { ctx } = this;
     for (const p of game.projectiles) {
-      const c = this.toScreen(p.pos);
-      if (p.side === 'human') {
-        // Laser bolt: bright dash with a glow.
-        ctx.fillStyle = 'rgba(227, 180, 72, 0.35)';
+      if (ARCING_WEAPONS.has(p.weapon)) this.drawGlob(p);
+      else this.drawBeam(p);
+    }
+  }
+
+  /** Laser streak trailing behind the shot's position. */
+  private drawBeam(p: Projectile): void {
+    const { ctx } = this;
+    const beam = BEAMS[p.weapon];
+    if (!beam) return;
+    const c = this.toScreen(p.pos);
+    const len = beam.length * this.scale;
+    const offsets = beam.twin ? [-0.09, 0.09] : [0];
+    ctx.lineCap = 'round';
+    for (const o of offsets) {
+      const ox = -p.dir.y * o * this.scale;
+      const oy = p.dir.x * o * this.scale;
+      const head = { x: c.x + ox, y: c.y + oy };
+      const tail = { x: head.x - p.dir.x * len, y: head.y - p.dir.y * len };
+      for (const [color, w] of [[beam.glow, beam.width * 3.5], [beam.core, beam.width]] as const) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1, w * this.scale);
         ctx.beginPath();
-        ctx.arc(c.x, c.y, this.scale * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff3c4';
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, this.scale * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Acid glob.
-        ctx.fillStyle = '#9bbf3a';
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = Math.max(1, this.scale * 0.03);
-        ctx.beginPath();
-        ctx.ellipse(c.x, c.y, this.scale * 0.18, this.scale * 0.13, (p.id % 6) * 0.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(tail.x, tail.y);
+        ctx.lineTo(head.x, head.y);
         ctx.stroke();
       }
     }
+  }
+
+  /** Acid glob lobbed in an arc, with a ground shadow and a dripping trail. */
+  private drawGlob(p: Projectile): void {
+    const { ctx } = this;
+    const big = p.weapon === 'spireSpit';
+    const c = this.toScreen(p.pos);
+    const lift = Math.sin(Math.PI * p.progress) * Math.min(p.startDist, 6) * 0.3 * this.scale;
+    const r = this.scale * (big ? 0.2 : 0.12);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, r, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const y = c.y - lift;
+    ctx.fillStyle = ACID;
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.arc(c.x - p.dir.x * r * 1.4 * i, y - p.dir.y * r * 1.4 * i + i * r * 0.3, r * (0.5 - i * 0.12), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, this.scale * 0.04);
+    ctx.beginPath();
+    ctx.ellipse(c.x, y, r, r * 0.8, (p.id % 6) * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 220, 0.7)';
+    ctx.beginPath();
+    ctx.arc(c.x - r * 0.35, y - r * 0.3, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   private drawEffects(dt: number): void {
@@ -374,6 +438,41 @@ export class Renderer {
           const d = s * (0.1 + rand() * 0.6) * (0.5 + t);
           ctx.beginPath();
           ctx.arc(c.x + Math.cos(a) * d, c.y + Math.sin(a) * d, s * (0.06 + rand() * 0.12), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (fx.kind === 'flash') {
+        // Muzzle flash: a quick bright star.
+        ctx.fillStyle = fx.color;
+        ctx.beginPath();
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + fx.seed;
+          const r = (i % 2 ? 0.12 : 0.4) * s * (1 - t * 0.5);
+          ctx.lineTo(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else if (fx.kind === 'slash') {
+        // Three claw rakes drawn across the tower.
+        ctx.strokeStyle = fx.color;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1.5, s * 0.08);
+        const reach = Math.min(1, t * 3);
+        const a = (fx.seed % 2) - 0.5;
+        for (const o of [-0.25, 0, 0.25]) {
+          const x0 = c.x + (o - 0.35) * s;
+          const y0 = c.y - 0.45 * s + a * o * s;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x0 + 0.7 * s * reach, y0 + 0.9 * s * reach);
+          ctx.stroke();
+        }
+      } else if (fx.kind === 'smoke') {
+        // Acid fumes curling up.
+        const rand = seeded(fx.seed);
+        ctx.fillStyle = fx.color;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(c.x + (rand() - 0.5) * s * 0.5, c.y - t * s * (0.5 + rand() * 0.5), s * (0.08 + t * 0.12), 0, Math.PI * 2);
           ctx.fill();
         }
       } else if (fx.kind === 'ring') {

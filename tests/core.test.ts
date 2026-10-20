@@ -96,7 +96,8 @@ describe('milestone 1 auto-sim', () => {
         }
         expect(game.phase).toBe('victory');
         expect(game.wave).toBe(FINAL_WAVE);
-        expect(game.tower.hp).toBeGreaterThanOrEqual(game.tower.maxHp - 3);
+        // Enemies now shoot and claw back, so the tower takes a few hits — but it should never be close.
+        expect(game.tower.hp).toBeGreaterThanOrEqual(game.tower.maxHp - 6);
       });
     }
   }
@@ -115,6 +116,41 @@ describe('milestone 1 auto-sim', () => {
     expect(game.placeTerrain(tile, 'asteroid')).toBe(true);
     expect(game.phase).toBe('wave');
     expect(game.wave).toBe(2);
+  });
+
+  it('troopers shoot from range and crawlers claw up close', () => {
+    for (const [side, attack] of [['monster', 'fire:pistol|fire:rifle'], ['human', 'melee']] as const) {
+      const seen = new Set<string>();
+      for (let seed = 1; seed <= 10; seed++) {
+        const game = new Game(side, seed);
+        game.startNextWave();
+        for (let i = 0; i < 60 * 300 && game.phase !== 'victory' && game.phase !== 'defeat'; i++) {
+          game.update(1 / 60);
+          for (const e of game.takeEvents()) {
+            if (e.type === 'fire' && e.side !== side) seen.add(`fire:${e.weapon}`);
+            if (e.type === 'melee') seen.add('melee');
+          }
+          if (phaseOf(game) === 'build-mechanism') {
+            game.applyUpgrade('range');
+            game.placeTerrain(game.board.allHexes().find((h) => game.board.canPlaceTerrain(h, 'nebula'))!, 'nebula');
+          }
+        }
+      }
+      expect(attack.split('|').some((a) => seen.has(a))).toBe(true);
+    }
+  });
+
+  it('player weapons match the biotype', () => {
+    for (const side of ['human', 'monster'] as Side[]) {
+      const game = new Game(side, 9);
+      game.startNextWave();
+      const weapons = new Set<string>();
+      for (let i = 0; i < 60 * 60 && game.phase === 'wave'; i++) {
+        game.update(1 / 60);
+        for (const e of game.takeEvents()) if (e.type === 'fire' && e.side === side) weapons.add(e.weapon);
+      }
+      expect([...weapons]).toEqual([BIOTYPES[side].tower.weapon]);
+    }
   });
 
   it('emits sounds-worthy events for both sides', () => {

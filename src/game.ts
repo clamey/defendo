@@ -1,6 +1,6 @@
-import { BIOTYPES, type Biotype, type Side, type TurretStats, type UpgradeKind, opponentOf } from './biotypes';
+import { BIOTYPES, type Biotype, ENEMY_WEAPONS, type EnemyWeapon, type Side, type TurretStats, type UpgradeKind, type Weapon, opponentOf } from './biotypes';
 import { Board, type Terrain, TOWER_HEX, createRng, scatterTerrain } from './board';
-import { HEX_SPACING, type Hex, type Point, hexKey, hexToWorld, worldToHex, worldDistance } from './hex';
+import { HEX_SPACING, type Hex, type Point, hexDistance, hexKey, hexToWorld, worldToHex, worldDistance } from './hex';
 import { computeFlowField, nextStep } from './pathing';
 import { type WaveSpec, waveSpec } from './waves';
 
@@ -25,7 +25,11 @@ export interface Enemy {
   hp: number;
   maxHp: number;
   speed: number;
-  damage: number;
+  weapon: EnemyWeapon;
+  /** Seconds until this enemy can attack again. */
+  cooldown: number;
+  /** 1 right after an attack, decaying to 0 — drives the lunge / recoil animation. */
+  attackAnim: number;
   /** Damage already in flight toward this enemy, so turrets don't overkill. */
   incoming: number;
   /** Animation phase, purely cosmetic. */
@@ -35,16 +39,24 @@ export interface Enemy {
 export interface Projectile {
   id: number;
   pos: Point;
+  /** An enemy id, or the tower's id for shots fired by enemies. */
   targetId: number;
   speed: number;
   damage: number;
   side: Side;
+  weapon: Weapon;
+  /** Unit direction of travel, for drawing streaks. */
+  dir: Point;
+  /** 0 at launch, 1 on impact — used to draw arcing lobs. */
+  progress: number;
+  startDist: number;
 }
 
 /** Things that happened this tick. The UI turns these into sounds and effects. */
 export type GameEvent =
-  | { type: 'fire'; side: Side; pos: Point }
-  | { type: 'hit'; side: Side; pos: Point }
+  | { type: 'fire'; side: Side; pos: Point; weapon: Weapon }
+  | { type: 'hit'; side: Side; pos: Point; weapon: Weapon }
+  | { type: 'melee'; side: Side; pos: Point }
   | { type: 'enemyDeath'; side: Side; pos: Point }
   | { type: 'towerDamaged'; side: Side; pos: Point }
   | { type: 'waveStart'; side: Side; wave: number }
@@ -172,10 +184,18 @@ export class Game {
     s.timer -= dt;
     if (s.timer > 0) return;
     s.timer += s.spec.interval;
-    s.remaining--;
     const spawnHexes = this.board.edgeHexes().filter((h) => this.flowField.has(hexKey(h)));
-    const start = spawnHexes[Math.floor(this.rng() * spawnHexes.length)];
-    const { hp, speed, damage } = s.spec;
+    const first = spawnHexes[Math.floor(this.rng() * spawnHexes.length)];
+    // A pack enters together along the same stretch of edge.
+    const nearby = spawnHexes.filter((h) => hexDistance(h, first) <= 1);
+    const count = Math.min(this.enemyType.enemy.packSize, s.remaining);
+    for (let i = 0; i < count; i++) this.spawnEnemy(nearby[i % nearby.length], s.spec);
+    s.remaining -= count;
+  }
+
+  private spawnEnemy(start: Hex, spec: WaveSpec): void {
+    const { hp, speed } = spec;
+    const weapons = this.enemyType.enemy.weapons;
     this.enemies.push({
       id: this.id(),
       pos: hexToWorld(start),
@@ -183,7 +203,9 @@ export class Game {
       hp,
       maxHp: hp,
       speed,
-      damage,
+      weapon: weapons[Math.floor(this.rng() * weapons.length)],
+      cooldown: 0.3 + this.rng() * 0.5,
+      attackAnim: 0,
       incoming: 0,
       wobble: this.rng() * Math.PI * 2,
     });
@@ -191,6 +213,18 @@ export class Game {
 
   private updateEnemies(dt: number): void {
     for (const e of this.enemies) {
+      e.attackAnim = Math.max(0, e.attackAnim - dt * 4);
+      const weapon = ENEMY_WEAPONS[e.weapon];
+      // Close enough to attack: stop and fight instead of advancing.
+      if (worldDistance(e.pos, this.tower.pos) <= weapon.range * HEX_SPACING) {
+        e.wobble += dt * 2;
+        e.cooldown -= dt;
+        if (e.cooldown <= 0) {
+          e.cooldown += weapon.cooldown;
+          this.enemyAttack(e);
+        }
+        continue;
+      }
       e.wobble += dt * 6;
       const here = worldToHex(e.pos);
       const slow = this.board.terrainAt(here) === 'nebula' ? 0.5 : 1;
@@ -209,13 +243,41 @@ export class Game {
         if (!next) break;
         e.target = next;
       }
-      if (this.board.isTower(e.target) && worldDistance(e.pos, this.tower.pos) < 0.6) {
-        this.tower.hp -= e.damage;
-        e.hp = 0;
-        this.emit({ type: 'towerDamaged', side: this.player.side, pos: this.tower.pos });
-      }
     }
-    this.enemies = this.enemies.filter((e) => e.hp > 0);
+  }
+
+  private enemyAttack(e: Enemy): void {
+    const weapon = ENEMY_WEAPONS[e.weapon];
+    e.attackAnim = 1;
+    const side = this.enemyType.side;
+    if (weapon.projectileSpeed === 0) {
+      this.emit({ type: 'melee', side, pos: this.tower.pos });
+      this.damageTower(weapon.damage);
+      return;
+    }
+    this.launch(e.pos, this.tower.id, this.tower.pos, weapon.projectileSpeed, weapon.damage, side, e.weapon);
+    this.emit({ type: 'fire', side, pos: e.pos, weapon: e.weapon });
+  }
+
+  private damageTower(amount: number): void {
+    this.tower.hp -= amount;
+    this.emit({ type: 'towerDamaged', side: this.player.side, pos: this.tower.pos });
+  }
+
+  private launch(from: Point, targetId: number, targetPos: Point, speed: number, damage: number, side: Side, weapon: Weapon): void {
+    const d = worldDistance(from, targetPos) || 1;
+    this.projectiles.push({
+      id: this.id(),
+      pos: { ...from },
+      targetId,
+      speed,
+      damage,
+      side,
+      weapon,
+      dir: { x: (targetPos.x - from.x) / d, y: (targetPos.y - from.y) / d },
+      progress: 0,
+      startDist: d,
+    });
   }
 
   private updateTurret(t: Turret, dt: number): void {
@@ -225,15 +287,9 @@ export class Game {
     if (!target) return;
     t.cooldown = 1 / t.stats.fireRate;
     target.incoming += t.stats.damage;
-    this.projectiles.push({
-      id: this.id(),
-      pos: { ...t.pos },
-      targetId: target.id,
-      speed: t.stats.projectileSpeed,
-      damage: t.stats.damage,
-      side: this.player.side,
-    });
-    this.emit({ type: 'fire', side: this.player.side, pos: t.pos });
+    const { projectileSpeed, damage, weapon } = t.stats;
+    this.launch(t.pos, target.id, target.pos, projectileSpeed, damage, this.player.side, weapon);
+    this.emit({ type: 'fire', side: this.player.side, pos: t.pos, weapon });
   }
 
   /** Closest-to-tower enemy in range that isn't already doomed by shots in flight. */
@@ -256,18 +312,26 @@ export class Game {
     const byId = new Map(this.enemies.map((e) => [e.id, e]));
     const live: Projectile[] = [];
     for (const p of this.projectiles) {
-      const e = byId.get(p.targetId);
-      if (!e || e.hp <= 0) continue;
-      const d = worldDistance(p.pos, e.pos);
+      const atTower = p.targetId === this.tower.id;
+      const e = atTower ? undefined : byId.get(p.targetId);
+      if (!atTower && (!e || e.hp <= 0)) continue;
+      const goal = e ? e.pos : this.tower.pos;
+      const d = worldDistance(p.pos, goal);
       const step = p.speed * dt;
       if (d <= step) {
+        this.emit({ type: 'hit', side: atTower ? this.player.side : this.enemyType.side, pos: goal, weapon: p.weapon });
+        if (!e) {
+          this.damageTower(p.damage);
+          continue;
+        }
         e.hp -= p.damage;
         e.incoming -= p.damage;
         if (e.hp <= 0) this.emit({ type: 'enemyDeath', side: this.enemyType.side, pos: e.pos });
-        else this.emit({ type: 'hit', side: this.enemyType.side, pos: e.pos });
         continue;
       }
-      p.pos = { x: p.pos.x + ((e.pos.x - p.pos.x) / d) * step, y: p.pos.y + ((e.pos.y - p.pos.y) / d) * step };
+      p.dir = { x: (goal.x - p.pos.x) / d, y: (goal.y - p.pos.y) / d };
+      p.pos = { x: p.pos.x + p.dir.x * step, y: p.pos.y + p.dir.y * step };
+      p.progress = Math.min(1, 1 - (d - step) / Math.max(p.startDist, d));
       live.push(p);
     }
     this.projectiles = live;
