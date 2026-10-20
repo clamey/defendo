@@ -102,6 +102,14 @@ describe('milestone 1 auto-sim', () => {
     }
   }
 
+  it('starts on a blank board', () => {
+    for (const side of ['human', 'monster'] as Side[]) {
+      const game = new Game(side, 5);
+      expect(game.board.terrain.size).toBe(0);
+      expect(game.mechanisms).toHaveLength(0);
+    }
+  });
+
   it('build phase runs mechanism step then terrain step, then the next wave', () => {
     const game = new Game('monster', 7);
     game.startNextWave();

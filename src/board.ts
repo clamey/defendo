@@ -103,24 +103,3 @@ export function createRng(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-/** Scatter a few starting terrain tiles, away from the tower and the edge. */
-export function scatterTerrain(board: Board, rng: () => number, asteroids = 4, nebulas = 3): void {
-  const candidates = board
-    .allHexes()
-    .filter((h) => {
-      const d = hexDistance(h, TOWER_HEX);
-      return d >= 2 && d <= board.radius - 1;
-    });
-  const place = (type: Terrain, count: number) => {
-    let placed = 0;
-    let attempts = 0;
-    while (placed < count && attempts < 200) {
-      attempts++;
-      const h = candidates[Math.floor(rng() * candidates.length)];
-      if (board.placeTerrain(h, type)) placed++;
-    }
-  };
-  place('asteroid', asteroids);
-  place('nebula', nebulas);
-}

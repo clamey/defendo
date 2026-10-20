@@ -56,7 +56,7 @@ tests/               hex, pathing, waves, auto-sim
 ```
 
 ## Milestone 1 acceptance
-1. Pick a biotype; the board loads with a few terrain tiles.
+1. Pick a biotype; the board starts as a blank hex grid (terrain only appears as the player places it).
 2. Wave 1 attacks; the tower auto-shoots every enemy.
 3. The build phase works: upgrade or mechanism, then one terrain tile.
 4. Victory screen after wave 5; each biotype sounds different.

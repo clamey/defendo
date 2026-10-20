@@ -1,5 +1,5 @@
 import { BIOTYPES, type Biotype, ENEMY_WEAPONS, type EnemyWeapon, type Side, type TurretStats, type UpgradeKind, type Weapon, opponentOf } from './biotypes';
-import { Board, type Terrain, TOWER_HEX, createRng, scatterTerrain } from './board';
+import { Board, type Terrain, TOWER_HEX, createRng } from './board';
 import { HEX_SPACING, type Hex, type Point, hexDistance, hexKey, hexToWorld, worldToHex, worldDistance } from './hex';
 import { computeFlowField, nextStep } from './pathing';
 import { type WaveSpec, waveSpec } from './waves';
@@ -88,7 +88,6 @@ export class Game {
     this.enemyType = BIOTYPES[opponentOf(side)];
     this.rng = createRng(seed);
     this.board = new Board(BOARD_RADIUS);
-    scatterTerrain(this.board, this.rng);
     this.flowField = computeFlowField(this.board);
     const t = this.player.tower;
     this.tower = {
