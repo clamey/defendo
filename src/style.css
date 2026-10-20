@@ -744,8 +744,12 @@ h1 {
   width: min(820px, 100%);
 }
 
-/* Player aid cards. */
+/* Player aid cards. A column layout keeps the header band at the top even when the
+   card stretches to match a taller neighbor (buttons center their content otherwise). */
 .card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   flex: 1 1 300px;
   max-width: 380px;
   min-width: 0;
